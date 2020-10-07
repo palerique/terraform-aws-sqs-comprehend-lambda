@@ -1,6 +1,6 @@
 data "archive_file" "terraform-aws-sqs-comprehend-lambda" {
   type = "zip"
-  source_file = "${path.module}/terraform-aws-sqs-comprehend-lambda.js"
+  source_dir = "${path.module}/lambda"
   output_path = "${path.module}/terraform-aws-sqs-comprehend-lambda.js.zip"
 }
 

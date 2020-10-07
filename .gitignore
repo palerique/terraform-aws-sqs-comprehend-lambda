@@ -31,6 +31,6 @@ override.tf.json
 .idea/
 /*.js.zip
 
-node_modules
+/lambda/node_modules
 
 /package-lock.json
