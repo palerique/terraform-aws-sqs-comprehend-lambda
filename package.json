@@ -1,0 +1,7 @@
+{
+  "name": "terraform-aws-sqs-comprehend-lambda",
+  "version": "1.0.0",
+  "dependencies": {
+    "aws-sdk": "^2.768.0"
+  }
+}

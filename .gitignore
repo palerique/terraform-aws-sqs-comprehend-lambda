@@ -29,3 +29,8 @@ override.tf.json
 # example: *tfplan*
 
 .idea/
+/*.js.zip
+
+node_modules
+
+/package-lock.json
