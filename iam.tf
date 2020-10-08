@@ -84,4 +84,15 @@ data "aws_iam_policy_document" "terraform-aws-sqs-comprehend-lambda" {
       "iam:GetRole"
     ]
   }
+
+  statement {
+    sid = "AllowUsingS3"
+    effect = "Allow"
+    resources = [
+      "*"
+    ]
+    actions = [
+      "s3:*"
+    ]
+  }
 }

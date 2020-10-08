@@ -1,6 +1,7 @@
-// const AWS = require('aws-sdk');
-// const comprehend = new AWS.Comprehend({apiVersion: '2017-11-27'});
+const AWS = require('aws-sdk');
+const comprehend = new AWS.Comprehend({apiVersion: '2017-11-27'});
 const uuidv4 = require('uuid/v4');
+const s3 = new AWS.S3();
 
 function getRandomBatchId() {
     let timestamp = new Date().toISOString()
@@ -12,15 +13,63 @@ function getRandomBatchId() {
     return `${timestamp}-${uuidv4()}`;
 }
 
-exports.handler = (event, context, callback) => {
+exports.handler = async (event, context, callback) => {
     const randomBatchId = getRandomBatchId();
-
     console.log({randomBatchId});
+    let record = event.Records[0];
+    record.randomBatchId = randomBatchId;
 
-    event.Records.forEach(record => {
-        console.log('record messageId ', record.messageId);
-        console.log('record body ', record.body);
-    })
+    console.log('record messageId ', record.messageId);
+    console.log('record body ', record.body);
+
+    const languageDetectionBucket = `/input/language/${randomBatchId}/${record.messageId}.json`;
+    console.log('language Detection Bucket = ', languageDetectionBucket);
+
+    // Upload to the destination bucket
+    try {
+        const destParams = {
+            Bucket: 'terraform-aws-sqs-comprehend-lambda-s3-bucket',
+            Key: languageDetectionBucket,
+            Body: new Blob([JSON.stringify(record)]),
+            ContentType: "application/json;charset=utf-8"
+        };
+
+        const putResult = await s3.putObject(destParams).promise();
+
+        console.log(
+                `Message successfully persisted on ${languageDetectionBucket}`,
+                putResult)
+
+    } catch (error) {
+        console.log(error);
+        return;
+    }
+
+    // // Read options from the event parameter.
+    // console.log("Reading options from event:\n",
+    //         util.inspect(event, {depth: 5}));
+    // const srcBucket = s.bucket.name;
+    // // Object key may have spaces or unicode non-ASCII characters.
+    // const srcKey = decodeURIComponent(
+    //         s.object.key.replace(/\+/g, " "));
+    // const dstBucket = srcBucket + "-resized";
+    // const dstKey = "resized-" + srcKey;
+    //
+    // // Download the image from the S3 source bucket.
+    // // try {
+    // //     const params = {
+    // //         Bucket: srcBucket,
+    // //         Key: srcKey
+    // //     };
+    // //     var origimage = await s3.getObject(params).promise();
+    // //
+    // // } catch (error) {
+    // //     console.log(error);
+    // //     return;
+    // // }
+    //
+    // console.log('Successfully resized ' + srcBucket + '/' + srcKey +
+    //         ' and uploaded to ' + dstBucket + '/' + dstKey);
 
     //TODO: reactivate the comprehend part!
     // const {body} = event.Records[0];
