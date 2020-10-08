@@ -15,22 +15,17 @@ function getRandomBatchId() {
 
 exports.handler = async (event, context, callback) => {
     const randomBatchId = getRandomBatchId();
-    console.log({randomBatchId});
     let record = event.Records[0];
     record.randomBatchId = randomBatchId;
 
-    console.log('record messageId ', record.messageId);
-    console.log('record body ', record.body);
-
     const languageDetectionBucket = `/input/language/${randomBatchId}/${record.messageId}.json`;
-    console.log('language Detection Bucket = ', languageDetectionBucket);
 
     // Upload to the destination bucket
     try {
         const destParams = {
             Bucket: 'terraform-aws-sqs-comprehend-lambda-s3-bucket',
             Key: languageDetectionBucket,
-            Body: new Blob([JSON.stringify(record)]),
+            Body: Buffer.from(JSON.stringify(record)),
             ContentType: "application/json;charset=utf-8"
         };
 
@@ -45,6 +40,7 @@ exports.handler = async (event, context, callback) => {
         return;
     }
 
+    //TODO schedule coherence job to detect language
     // // Read options from the event parameter.
     // console.log("Reading options from event:\n",
     //         util.inspect(event, {depth: 5}));
