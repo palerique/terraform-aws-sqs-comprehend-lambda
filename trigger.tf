@@ -2,5 +2,5 @@ resource "aws_lambda_event_source_mapping" "terraform-aws-sqs-comprehend-lambda-
   batch_size = 1
   event_source_arn = aws_sqs_queue.terraform-aws-sqs-comprehend-lambda-queue.arn
   enabled = true
-  function_name = aws_lambda_function.terraform-aws-sqs-comprehend-lambda.arn
+  function_name = aws_lambda_function.eventProcessorLambda.arn
 }
