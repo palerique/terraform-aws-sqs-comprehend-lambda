@@ -26,7 +26,7 @@ exports.handler = async (event, context, callback) => {
     try {
         const destParams = {
             Bucket: bucket,
-            Key: `/${inputPath}/${record.messageId}.json`,
+            Key: `${inputPath}/${record.messageId}.json`,
             Body: Buffer.from(JSON.stringify(record)),
             ContentType: "application/json;charset=utf-8"
         };

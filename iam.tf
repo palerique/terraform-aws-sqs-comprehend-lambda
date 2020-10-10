@@ -6,7 +6,10 @@ resource "aws_iam_role" "terraform-aws-sqs-comprehend-lambda" {
     {
       "Effect": "Allow",
       "Principal": {
-        "Service": "lambda.amazonaws.com"
+        "Service": [
+            "lambda.amazonaws.com",
+            "comprehend.amazonaws.com"
+        ]
       },
       "Action": "sts:AssumeRole"
     }

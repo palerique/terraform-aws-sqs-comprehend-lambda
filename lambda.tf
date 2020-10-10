@@ -19,6 +19,7 @@ resource "aws_lambda_function" "eventProcessorLambda" {
   environment {
     variables = {
       ROLE_ARN = aws_iam_role.terraform-aws-sqs-comprehend-lambda.arn
+      S3_ADDRESS = aws_s3_bucket.terraform-aws-sqs-comprehend-lambda-s3-bucket.arn
     }
   }
 }
