@@ -144,3 +144,11 @@ data "aws_iam_policy_document" "terraform-aws-sqs-comprehend-lambda" {
     ]
   }
 }
+
+resource "aws_lambda_permission" "allow_bucket" {
+  statement_id  = "AllowExecutionFromS3Bucket"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.languageProcessorLambda.arn
+  principal     = "s3.amazonaws.com"
+  source_arn    = aws_s3_bucket.terraform-aws-sqs-comprehend-lambda-s3-bucket.arn
+}
