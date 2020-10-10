@@ -6,7 +6,7 @@ resource "aws_s3_bucket_notification" "output_language_bucket_notification" {
     events = [
       "s3:ObjectCreated:*"
     ]
-    filter_prefix = "/output/language/"
+    filter_prefix = "output/language/"
     filter_suffix = ".tar.gz"
   }
 
