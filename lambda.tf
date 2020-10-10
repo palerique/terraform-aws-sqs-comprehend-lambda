@@ -15,4 +15,10 @@ resource "aws_lambda_function" "eventProcessorLambda" {
 
   timeout = 30
   memory_size = 128
+
+  environment {
+    variables = {
+      ROLE_ARN = aws_iam_role.terraform-aws-sqs-comprehend-lambda.arn
+    }
+  }
 }

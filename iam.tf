@@ -95,4 +95,49 @@ data "aws_iam_policy_document" "terraform-aws-sqs-comprehend-lambda" {
       "s3:*"
     ]
   }
+
+  statement {
+    sid = "AllowIAMPassRole"
+    effect = "Allow"
+    resources = [
+      "*"
+    ]
+    actions = [
+      "iam:*",
+      "iam:PassRole",
+      "organizations:DescribeAccount",
+      "organizations:DescribeOrganization",
+      "organizations:DescribeOrganizationalUnit",
+      "organizations:DescribePolicy",
+      "organizations:ListChildren",
+      "organizations:ListParents",
+      "organizations:ListPoliciesForTarget",
+      "organizations:ListRoots",
+      "organizations:ListPolicies",
+      "organizations:ListTargetsForPolicy"
+    ]
+  }
+
+  statement {
+    sid = "AllowAllComprehendActions"
+    effect = "Allow"
+    resources = [
+      "*"
+    ]
+    actions = [
+      "comprehend:*",
+      "iam:ListRoles",
+      "iam:GetRole",
+      "s3:ListAllMyBuckets",
+      "s3:ListBucket",
+      "s3:GetBucketLocation",
+      "iam:CreateRole",
+      "iam:CreatePolicy",
+      "iam:AttachRolePolicy",
+      "iam:PassRole",
+      "kms:CreateGrant",
+      "kms:Decrypt",
+      "kms:GenerateDatakey"
+    ]
+  }
 }
