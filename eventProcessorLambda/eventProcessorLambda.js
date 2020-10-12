@@ -13,13 +13,12 @@ function getRandomBatchId() {
     return `${timestamp}-${uuidv4()}`;
 }
 
-const bucket = 'terraform-aws-sqs-comprehend-lambda-s3-bucket';
-
 exports.handler = async (event, context, callback) => {
     const randomBatchId = getRandomBatchId();
     let record = event.Records[0];
     record.randomBatchId = randomBatchId;
 
+    const bucket = 'terraform-aws-sqs-comprehend-lambda-s3-bucket';
     let inputPath = `input/language/${randomBatchId}`;
 
     // Upload to the destination bucket
@@ -42,14 +41,6 @@ exports.handler = async (event, context, callback) => {
         return;
     }
 
-    //TODO: reactivate the comprehend part!
-    // const {body} = event.Records[0];
-    //
-    // const params = {
-    //     LanguageCode: 'en', /* required */
-    //     Text: body /* required */
-    // };
-
     let callbackFunc = (err, data) => {
         if (err) {
             // an error occurred
@@ -60,32 +51,6 @@ exports.handler = async (event, context, callback) => {
             console.log(data);
         }
     };
-
-    //TODO: # Instantiate Boto3 SDK:
-    // client = boto3.client('comprehend', region_name='region')
-    //
-    // start_response = client.start_document_classification_job(
-    //     InputDataConfig={
-    //         'S3Uri': 's3://srikad-us-west-2-input/docclass/file name',
-    //         'InputFormat': 'ONE_DOC_PER_LINE'
-    //     },
-    //     OutputDataConfig={
-    //         'S3Uri': 's3://S3Bucket/output'
-    //     },
-    //     DataAccessRoleArn='arn:aws:iam::account number:role/resource name',
-    //     DocumentClassifierArn=
-    //     'arn:aws:comprehend:region:account number:document-classifier/SampleCodeClassifier1'
-    // )
-    //
-    // print("Start response: %s\n", start_response)
-    //
-    // # Check the status of the job
-    // describe_response = client.describe_document_classification_job(JobId=start_response['JobId'])
-    // print("Describe response: %s\n", describe_response)
-    //
-    // # List all classification jobs in account
-    // list_response = client.list_document_classification_jobs()
-    // print("List response: %s\n", list_response)
 
     let dataAccessRoleArn = process.env.ROLE_ARN ? process.env.ROLE_ARN
             : 'arn:aws:iam::799098231639:role/terraform-20201009133944414300000001';
@@ -106,15 +71,6 @@ exports.handler = async (event, context, callback) => {
     };
     comprehend.startDominantLanguageDetectionJob(batchDetectLanguageParams,
             callbackFunc)
-
-    // comprehend.detectDominantLanguage({
-    //     Text: body /* required */
-    // }, callbackFunc);
-    // comprehend.detectKeyPhrases(params, callbackFunc);
-    // comprehend.detectEntities(params, callbackFunc);
-    // // comprehend.detectPiiEntities(params, callbackFunc);
-    // comprehend.detectSentiment(params, callbackFunc);
-    // // comprehend.detectSyntax(params, callbackFunc);
 
     callback(null, 'Hello from Lambda');
 };
