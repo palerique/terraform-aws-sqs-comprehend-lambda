@@ -10,6 +10,38 @@ const firstIndexOf = (c, ...vars) => Math.min(
 const lastIndexOf = (c, ...vars) => Math.max(
         ...vars.map(v => c.lastIndexOf(v)));
 
+function deleteFolderAtBucket(bucket, prefix, callback) {
+    s3.listObjects({
+        Bucket: bucket,
+        Prefix: prefix
+    }, (err, data) => {
+        if (err) {
+            return callback(err);
+        }
+
+        if (data.Contents.length === 0) {
+            callback();
+        }
+
+        const params = {
+            Bucket: bucket,
+            Delete: {Objects: []}
+        };
+
+        data.Contents.forEach(function (content) {
+            params.Delete.Objects.push({Key: content.Key});
+        });
+
+        s3.deleteObjects(params, (err, data) => {
+            if (err) {
+                return callback(err);
+            }
+            console.log('delete resulted in ', data);
+            callback();
+        });
+    });
+}
+
 exports.handler = async (event, context) => {
     console.log('Received event:', JSON.stringify(event, null, 2));
 
@@ -29,34 +61,47 @@ exports.handler = async (event, context) => {
         .slice(1)
         .map(c => JSON.parse(c.substring(firstIndexOf(c, '{', '['),
                 lastIndexOf(c, '}', ']') + 1)));
-        // console.log('===> jsonObject: ', jsonObject);
-        // jsonObject[0].Languages.forEach(language => console.log(language))
         const language = jsonObject[0].Languages[0];
         console.log('probably this is the language: ', language);
 
         const pathComponent = comprehendOutputKey.split('/');
-        //TODO: get original file to add language information:
         let languageInputBucket = 'terraform-aws-sqs-comprehend-lambda-s3-bucket';
         let randomBatchId = `${pathComponent[2]}`;
-        const filename = jsonObject[0].File;
-        let comprehendInputKey = `input/language/${randomBatchId}/${filename}`;
-        const comprehendInputParams = {
+        const languageInputPath = `input/language/${randomBatchId}/`;
+        const languageInputKey = `${languageInputPath}${(jsonObject[0].File)}`;
+        const comprehendInput = await s3.getObject({
             Bucket: languageInputBucket,
-            Key: comprehendInputKey,
+            Key: languageInputKey,
             ResponseContentType: 'application/json',
+        }).promise();
+
+        const firstInputMessage = JSON.parse(comprehendInput.Body.toString());
+
+        //TODO: add the language information to the first input
+        firstInputMessage.language = jsonObject[0].Languages;
+        console.log('|-=-=-=-=-=>>> firstInputMessage:', firstInputMessage);
+
+        //TODO: save to the next input s3
+        ///input/entities-and-phrases/${randomBatchId}/${messageId}.txt
+        //TODO: start next comprehend analysis
+        //TODO: put it on JIA internal QUEUE
+
+        //TODO: delete no longer needed files:
+        const deleteCallback = (err, data) => {
+            if (err) {
+                console.error('Error deleting folder', err)
+                return;
+            }
+            console.log('Successfully deleted', data);
         };
-        console.log('comprehendInputParams ===> ', comprehendInputParams);
 
-        const comprehendInput = await s3.getObject(
-                comprehendInputParams).promise();
-        // console.log(comprehendInput.Body.toString()
-        // .split('\0ustar')
-        // .slice(1)
-        // .map(c => JSON.parse(c.substring(firstIndexOf(c, '{', '['),
-        //         lastIndexOf(c, '}', ']') + 1))));
+        deleteFolderAtBucket(languageInputBucket, languageInputPath,
+                deleteCallback);
 
-        //TODO: convert the string to an object
-        console.log(comprehendInput.Body.toString());
+        console.log('|***********>>> comprehendOutputKey', comprehendOutputKey)
+
+        deleteFolderAtBucket(languageOutputBucket, comprehendOutputKey,
+                deleteCallback);
 
         return language;
     } catch (err) {
