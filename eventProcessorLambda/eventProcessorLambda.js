@@ -1,7 +1,7 @@
-const AWS = require('aws-sdk');
-const comprehend = new AWS.Comprehend({apiVersion: '2017-11-27'});
+const aws = require('aws-sdk');
+const comprehend = new aws.Comprehend({apiVersion: '2017-11-27'});
 const uuidv4 = require('uuid/v4');
-const s3 = new AWS.S3();
+const s3 = new aws.S3();
 
 function getRandomBatchId() {
     let timestamp = new Date().toISOString()
@@ -15,25 +15,45 @@ function getRandomBatchId() {
 
 exports.handler = async (event, context, callback) => {
     const randomBatchId = getRandomBatchId();
-    let record = event.Records[0];
-    record.randomBatchId = randomBatchId;
+    let msg = event.Records[0];
+    msg.randomBatchId = randomBatchId;
 
     const bucket = 'terraform-aws-sqs-comprehend-lambda-s3-bucket';
     let inputPath = `input/language/${randomBatchId}`;
 
     // Upload to the destination bucket
     try {
-        const destParams = {
+        const inputParams = {
             Bucket: bucket,
-            Key: `${inputPath}/${record.messageId}.json`,
-            Body: Buffer.from(JSON.stringify(record)),
+            Key: `${inputPath}/${msg.messageId}.txt`,
+            Body: Buffer.from(msg.body)
+        };
+
+        const putResult = await s3.putObject(inputParams).promise();
+
+        console.log(
+                `Text successfully persisted on ${inputPath}${msg.messageId}.txt`,
+                putResult)
+
+    } catch (error) {
+        console.log(error);
+        return;
+    }
+
+    //Upload to messages bkp
+    let messagesPath = `messages/${randomBatchId}`;
+    try {
+        const msgBkpParams = {
+            Bucket: bucket,
+            Key: `${messagesPath}/${msg.messageId}.json`,
+            Body: Buffer.from(JSON.stringify(msg)),
             ContentType: "application/json;charset=utf-8"
         };
 
-        const putResult = await s3.putObject(destParams).promise();
+        const putResult = await s3.putObject(msgBkpParams).promise();
 
         console.log(
-                `Message successfully persisted on ${inputPath}${record.messageId}.json`,
+                `Message successfully persisted on ${messagesPath}/${msg.messageId}.json`,
                 putResult)
 
     } catch (error) {
@@ -44,6 +64,7 @@ exports.handler = async (event, context, callback) => {
     let callbackFunc = (err, data) => {
         if (err) {
             // an error occurred
+            //TODO: send message back to SQS
             console.error(err, err.stack);
         } else {
             // successful response
@@ -54,9 +75,6 @@ exports.handler = async (event, context, callback) => {
 
     let dataAccessRoleArn = process.env.ROLE_ARN ? process.env.ROLE_ARN
             : 'arn:aws:iam::799098231639:role/terraform-20201009133944414300000001';
-
-    console.log('Role ARN being used: ', dataAccessRoleArn);
-    console.log('Role ARN on env var: ', process.env.ROLE_ARN);
 
     let batchDetectLanguageParams = {
         InputDataConfig: {

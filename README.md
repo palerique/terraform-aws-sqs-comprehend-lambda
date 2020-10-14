@@ -26,6 +26,8 @@ aws sqs send-message-batch \
 ```shell script
 terraform destroy -auto-approve ||  cloud-nuke aws --region us-east-1 
 terraform apply -auto-approve && aws sqs send-message-batch --queue-url https://sqs.us-east-1.amazonaws.com/799098231639/terraform-aws-sqs-comprehend-lambda-queue --entries file://send-message-batch.json
+aws s3 sync s3://terraform-aws-sqs-comprehend-lambda-s3-bucket .
+aws s3 sync . s3://terraform-aws-sqs-comprehend-lambda-s3-bucket
 ```
 
 

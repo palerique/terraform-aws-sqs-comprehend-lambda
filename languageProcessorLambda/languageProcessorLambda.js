@@ -2,6 +2,7 @@ console.log('Loading function');
 
 const aws = require('aws-sdk');
 const s3 = new aws.S3({apiVersion: '2006-03-01'});
+const comprehend = new aws.Comprehend({apiVersion: '2017-11-27'});
 
 const {unzipSync} = require('zlib');
 
@@ -20,7 +21,7 @@ function deleteFolderAtBucket(bucket, prefix, callback) {
         }
 
         if (data.Contents.length === 0) {
-            callback();
+            callback(err, data);
         }
 
         const params = {
@@ -36,21 +37,93 @@ function deleteFolderAtBucket(bucket, prefix, callback) {
             if (err) {
                 return callback(err);
             }
-            console.log('delete resulted in ', data);
-            callback();
+            callback(err, data);
         });
     });
+}
+
+const applicationJsonCharsetUtf8 = "application/json;charset=utf-8";
+
+function getComprehendParams(msg, bucket, inputKey, randomBatchId,
+        outputPrefix) {
+    return {
+        LanguageCode: msg.languages[0].LanguageCode,
+        InputDataConfig: {
+            S3Uri: `s3://${bucket}/${inputKey}`,
+            InputFormat: 'ONE_DOC_PER_FILE'
+        },
+        OutputDataConfig: {
+            S3Uri: `s3://${bucket}/output/${outputPrefix}/${randomBatchId}/`,
+        },
+        DataAccessRoleArn: process.env.ROLE_ARN,
+        JobName: randomBatchId
+    };
+}
+
+function deleteNoLongerNeededFiles(randomBatchId, bucket, comprehendOutputKey) {
+    const deleteCallback = (err, data) => {
+        if (err) {
+            console.error('Error deleting folder', err)
+        }
+        console.log('Successfully deleted', data);
+    };
+
+    const languageInputPath = `input/language/${randomBatchId}`;
+    deleteFolderAtBucket(bucket, languageInputPath, deleteCallback);
+
+    const comprehendOutputPath = comprehendOutputKey.substring(0,
+            comprehendOutputKey.indexOf(randomBatchId)
+            + randomBatchId.length);
+    deleteFolderAtBucket(bucket, comprehendOutputPath, deleteCallback);
+}
+
+function startNextComprehendAnalysis(msg, bucket, entitiesInputKey,
+        randomBatchId) {
+    const comprehendCallback = (err, data) => {
+        if (err) {
+            //TODO:
+            console.error(err, err.stack);
+        } else {
+            console.log(data);
+        }
+    };
+
+    comprehend.startEntitiesDetectionJob(
+            getComprehendParams(
+                    msg,
+                    bucket,
+                    entitiesInputKey,
+                    randomBatchId,
+                    `entities`),
+            comprehendCallback);
+
+    comprehend.startKeyPhrasesDetectionJob(
+            getComprehendParams(
+                    msg,
+                    bucket,
+                    entitiesInputKey,
+                    randomBatchId,
+                    `phrases`),
+            comprehendCallback);
+
+    comprehend.startSentimentDetectionJob(
+            getComprehendParams(
+                    msg,
+                    bucket,
+                    entitiesInputKey,
+                    randomBatchId,
+                    `sentiment`),
+            comprehendCallback);
 }
 
 exports.handler = async (event, context) => {
     console.log('Received event:', JSON.stringify(event, null, 2));
 
-    // Get the object from the event and show its content type
-    const languageOutputBucket = event.Records[0].s3.bucket.name;
+    const bucket = event.Records[0].s3.bucket.name;
     const comprehendOutputKey = decodeURIComponent(
             event.Records[0].s3.object.key.replace(/\+/g, ' '));
     const comprehendOutputParams = {
-        Bucket: languageOutputBucket,
+        Bucket: bucket,
         Key: comprehendOutputKey,
     };
     try {
@@ -62,53 +135,50 @@ exports.handler = async (event, context) => {
         .map(c => JSON.parse(c.substring(firstIndexOf(c, '{', '['),
                 lastIndexOf(c, '}', ']') + 1)));
         const language = jsonObject[0].Languages[0];
-        console.log('probably this is the language: ', language);
 
         const pathComponent = comprehendOutputKey.split('/');
-        let languageInputBucket = 'terraform-aws-sqs-comprehend-lambda-s3-bucket';
-        let randomBatchId = `${pathComponent[2]}`;
-        const languageInputPath = `input/language/${randomBatchId}/`;
-        const languageInputKey = `${languageInputPath}${(jsonObject[0].File)}`;
-        const comprehendInput = await s3.getObject({
-            Bucket: languageInputBucket,
-            Key: languageInputKey,
-            ResponseContentType: 'application/json',
+        const randomBatchId = `${pathComponent[2]}`;
+
+        const messageInputPath = `messages/${randomBatchId}`;
+        const msgFilename = jsonObject[0].File.replace('.txt', '.json');
+        const msgKey = `${messageInputPath}/${msgFilename}`;
+
+        const msgAtS3 = await s3.getObject({
+            Bucket: bucket,
+            Key: msgKey,
+            ResponseContentType: applicationJsonCharsetUtf8,
         }).promise();
 
-        const firstInputMessage = JSON.parse(comprehendInput.Body.toString());
+        const msg = JSON.parse(msgAtS3.Body.toString());
+        msg.languages = jsonObject[0].Languages;
 
-        //TODO: add the language information to the first input
-        firstInputMessage.language = jsonObject[0].Languages;
-        console.log('|-=-=-=-=-=>>> firstInputMessage:', firstInputMessage);
+        console.log('=====> check if message now has the languages inside: ',
+                msg);
 
-        //TODO: save to the next input s3
-        ///input/entities-and-phrases/${randomBatchId}/${messageId}.txt
-        //TODO: start next comprehend analysis
+        const entitiesInputKey = `input/entities-and-phrases/${randomBatchId}/${msg.messageId}.txt`;
+        await s3.putObject({
+            Bucket: bucket,
+            Key: entitiesInputKey,
+            Body: Buffer.from(msg.body),
+            ContentType: applicationJsonCharsetUtf8
+        }).promise();
+
+        await s3.putObject({
+            Bucket: bucket,
+            Key: msgKey,
+            Body: Buffer.from(JSON.stringify(msg)),
+            ContentType: applicationJsonCharsetUtf8
+        }).promise();
+
+        startNextComprehendAnalysis(msg, bucket, entitiesInputKey,
+                randomBatchId);
         //TODO: put it on JIA internal QUEUE
-
-        //TODO: delete no longer needed files:
-        const deleteCallback = (err, data) => {
-            if (err) {
-                console.error('Error deleting folder', err)
-                return;
-            }
-            console.log('Successfully deleted', data);
-        };
-
-        deleteFolderAtBucket(languageInputBucket, languageInputPath,
-                deleteCallback);
-
-        console.log('|***********>>> comprehendOutputKey', comprehendOutputKey)
-
-        deleteFolderAtBucket(languageOutputBucket, comprehendOutputKey,
-                deleteCallback);
+        deleteNoLongerNeededFiles(randomBatchId, bucket,
+                comprehendOutputKey);
 
         return language;
     } catch (err) {
-        console.log(err);
-        const message = `Error getting object ${comprehendOutputKey} from bucket ${languageOutputBucket}. 
-        Make sure they exist and your bucket is in the same region as this function.`;
-        console.log(message);
-        throw new Error(message);
+        console.error(err);
+        throw new Error(err);
     }
 };
