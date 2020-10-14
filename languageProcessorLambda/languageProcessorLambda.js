@@ -1,8 +1,9 @@
 console.log('Loading function');
 
-const aws = require('aws-sdk');
-const s3 = new aws.S3({apiVersion: '2006-03-01'});
-const comprehend = new aws.Comprehend({apiVersion: '2017-11-27'});
+const AWS = require('aws-sdk');
+const s3 = new AWS.S3({apiVersion: '2006-03-01'});
+const comprehend = new AWS.Comprehend({apiVersion: '2017-11-27'});
+const sqs = new AWS.SQS({apiVersion: '2012-11-05'});
 
 const {unzipSync} = require('zlib');
 
@@ -116,7 +117,24 @@ function startNextComprehendAnalysis(msg, bucket, entitiesInputKey,
             comprehendCallback);
 }
 
-exports.handler = async (event, context) => {
+async function sendMessageTo(msg, queueUrl) {
+
+    const params = {
+        MessageBody: JSON.stringify(msg),
+        QueueUrl: queueUrl
+    };
+
+    console.log('using these params: ', params);
+
+    try {
+        await sqs.sendMessage(params).promise();
+        console.log('message sent to SQS queue ', msg, queueUrl);
+    } catch (err) {
+        console.error(err, err.stack);
+    }
+}
+
+exports.handler = async (event) => {
     console.log('Received event:', JSON.stringify(event, null, 2));
 
     const bucket = event.Records[0].s3.bucket.name;
@@ -152,33 +170,35 @@ exports.handler = async (event, context) => {
         const msg = JSON.parse(msgAtS3.Body.toString());
         msg.languages = jsonObject[0].Languages;
 
-        console.log('=====> check if message now has the languages inside: ',
-                msg);
+        console.log('=====> message now has the languages inside: ', msg);
 
-        const entitiesInputKey = `input/entities-and-phrases/${randomBatchId}/${msg.messageId}.txt`;
-        await s3.putObject({
-            Bucket: bucket,
-            Key: entitiesInputKey,
-            Body: Buffer.from(msg.body),
-            ContentType: applicationJsonCharsetUtf8
-        }).promise();
+        // const entitiesInputKey = `input/entities-and-phrases/${randomBatchId}/${msg.messageId}.txt`;
+        // await s3.putObject({
+        //     Bucket: bucket,
+        //     Key: entitiesInputKey,
+        //     Body: Buffer.from(msg.body),
+        //     ContentType: applicationJsonCharsetUtf8
+        // }).promise();
+        //
+        // await s3.putObject({
+        //     Bucket: bucket,
+        //     Key: msgKey,
+        //     Body: Buffer.from(JSON.stringify(msg)),
+        //     ContentType: applicationJsonCharsetUtf8
+        // }).promise();
+        sendMessageTo(msg, process.env.SQS_INTERNAL_QUEUE);
 
-        await s3.putObject({
-            Bucket: bucket,
-            Key: msgKey,
-            Body: Buffer.from(JSON.stringify(msg)),
-            ContentType: applicationJsonCharsetUtf8
-        }).promise();
+        console.log('method to send message was called already')
 
-        startNextComprehendAnalysis(msg, bucket, entitiesInputKey,
-                randomBatchId);
-        //TODO: put it on JIA internal QUEUE
-        deleteNoLongerNeededFiles(randomBatchId, bucket,
-                comprehendOutputKey);
+        // startNextComprehendAnalysis(msg, bucket, entitiesInputKey,
+        //         randomBatchId);
+        // //TODO: put it on JIA internal QUEUE
+        // deleteNoLongerNeededFiles(randomBatchId, bucket,
+        //         comprehendOutputKey);
 
         return language;
     } catch (err) {
         console.error(err);
-        throw new Error(err);
+        sendMessageTo(comprehendOutputParams, process.env.SQS_ERROR_QUEUE);
     }
 };

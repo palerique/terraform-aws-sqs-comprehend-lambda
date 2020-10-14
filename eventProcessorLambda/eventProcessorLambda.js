@@ -18,7 +18,7 @@ exports.handler = async (event, context, callback) => {
     let msg = event.Records[0];
     msg.randomBatchId = randomBatchId;
 
-    const bucket = 'terraform-aws-sqs-comprehend-lambda-s3-bucket';
+    const bucket = process.env.BUCKET;
     let inputPath = `input/language/${randomBatchId}`;
 
     // Upload to the destination bucket
@@ -31,12 +31,12 @@ exports.handler = async (event, context, callback) => {
 
         const putResult = await s3.putObject(inputParams).promise();
 
-        console.log(
-                `Text successfully persisted on ${inputPath}${msg.messageId}.txt`,
+        console.log(`Text successfully persisted 
+        on ${inputPath}${msg.messageId}.txt`,
                 putResult)
 
     } catch (error) {
-        console.log(error);
+        console.error(error);
         return;
     }
 
