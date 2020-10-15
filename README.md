@@ -3,6 +3,10 @@ A lab testing terraform on aws with sqs, comprehend and lambda
 
 ## Usage
 
+Create a file named `terraform.tfvars` and define variables named in `variables.tf`. For e.g:
+`s3_bucket_name = "desired_bucket_name"`
+
+
 ```
 $ terraform init
 $ terraform plan
